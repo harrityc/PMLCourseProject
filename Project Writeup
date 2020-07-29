@@ -1,0 +1,81 @@
+---
+title: "PMLCourseProjectWriteup"
+author: "Chris Harrity"
+date: "7/29/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Partitioning and Cleaning the Data
+
+The pmltraining and pmltesting datasets include summary variables for describing trends in the raw data collected. Totals, standard deviations, averages, variances, skewnesses, kurtoses, minimums, maximums, and amplitudes were all measured and assigned variables in the dataset. These should have been presented separately from the raw data, and were excluded from the final dataset. 
+
+```{r paring}
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",".\\pmltraining.csv")
+
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",".\\pmltesting.csv")
+
+prepdata <- read.csv(".\\pmltraining.csv")
+validation <- read.csv(".\\pmltesting.csv")
+
+preppared <- prepdata[, c(8:11, 37:49, 60:68, 84:86, 113:124, 151:160)]
+prepnototal <- preppared[, c(-4, -17)]
+
+valpared <- validation[, c(8:11, 37:49, 60:68, 84:86, 113:124, 151:160)]
+valnototal <- valpared[, c(-4, -17)]
+```
+
+To evaluate the accuracy of the models tested in this project, the pmltraining dataset was partitioned such that 80% of the included data was dedicated to training models, and 20% to testing their accuracy. This was done using the "createDataPartition" function in R's caret package.
+
+```{r loading}
+library(caret)
+set.seed(18)
+
+inTrain <- createDataPartition(prepnototal$classe, p = 0.8)[[1]]
+train <- prepnototal[inTrain,]
+test <- prepnototal[-inTrain,]
+```
+
+This process left 48 independent variables and 1 dependent variable. All were used for model generation.
+
+## Model Selection and Estimated Accuracy
+
+Given that the problem at hand is to predict classifications rather than continuous values, regularized regression -- at least as discussed in this class -- is not an available option. 
+
+A gradient-boosted model (gbm), a linear discriminant analysis (lda), and a regression tree (rpart) model were all trained on the partitioned training dataset, and predictions from each were evaluated against test data using confusion matrices. From these three predictions, an ensemble model was generated as a generalized additive model (gam). A random forest model was attempted, but present hardware limitations rendered the training of such a model prohibitively time-consuming. All model training was done using the "train" function of the caret package in R.
+
+```{r models}
+modelgbm <- train(classe~., data = train, method = "gbm", verbose = FALSE)
+modellda <- train(classe~., data = train, method = "lda")
+modelrpart <- train(classe~., data = train, method = "rpart")
+
+predgbm <- predict(modelgbm, newdata = test)
+predrpart <- predict(modelrpart, newdata = test)
+predlda <- predict(modellda, newdata = test)
+
+
+DF <- data.frame(predgbm, predrpart, predlda, classe = test$classe)
+combfit <- train(classe~., data = DF, model = "gam")
+combpred <- predict(combfit, newdata = DF)
+```
+
+Of the three single models, gbm performed the most accurately by far, achieving an accuracy of 0.9676 versus the lda's 0.6997 and the rpart's 0.5006. The ensemble model failed to outperform any of the single models, matching the gbm's accuracy. The "postResample" function yields a kappa value of approximately 0.9590 for the gbm.
+
+```{r evalute}
+confusionMatrix(predgbm, test$classe)
+confusionMatrix(predlda, test$classe)
+confusionMatrix(predrpart, test$classe)
+confusionMatrix(combpred, test$classe)
+
+postResample(predgbm, test$classe)
+```
+
+Given these results, the predictions for the pmltesting, or "validation", set, are as follows:
+
+```{r results}
+valpredgbm <- predict(modelgbm, newdata = valnototal)
+valpredgbm
+```
