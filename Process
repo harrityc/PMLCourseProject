@@ -32,3 +32,10 @@ predlda <- predict(modellda, newdata = test)
 DF <- data.frame(predgbm, predrpart, predlda, classe = test$classe)
 combfit <- train(classe~., data = DF, model = "gam")
 combpred <- predict(combfit, newdata = DF)
+
+# Evalute Accuracy
+
+confusionMatrix(predgbm, test$classe)
+confusionMatrix(predlda, test$classe)
+confusionMatrix(predrpart, test$classe)
+confusionMatrix(combpred, test$classe)
